@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Web网页端与打印机通信 (Web Client and Printer Communication)</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="css/theme-chalk-index.css">
+    <script src="lib/vue.min.js"></script>
+    <script src="lib/element-ui-index.js"></script>
+    <script src="lib/encodeToGb2312.min.js"></script>
+    <script src="lib/function.js"></script>
+    <script src="lib/esc.js"></script>
+    <script src="lib/tsc.js"></script>
+    <style>
+        #app {max-width: 700px;margin: auto;background: #ebeef5;border-radius: 10px;padding: 15px;margin-top: 30px;}
+        #app h1 {font-size: 22px;margin: 20px 0 40px;text-align: center;}
+        .el-select {width:55%;min-width: 280px;}
+    </style>
+</head>
+<body>
+    <div id="app">
+        <template>
+            <h1>Web网页端与打印机通信 (Web Client and Printer Communication)</h1>
+            <el-form ref="form" :model="form" label-width="150px" size="mini">
+                <el-form-item label="通信模式">
+                    <el-select v-model="conModel" placeholder="请选择通信模式" @change="modelChange">
+                        <el-option v-for="item in models" :key="item.value" :disabled="item.disabled"
+                            :label="item.label" :value="item.value">
+                        </el-option>
+                </el-form-item>
+                <el-row>
+                    <el-form-item label="网口信息" v-show="!isPortModel">
+                        <el-col style="width: 150px">
+                            <el-input type="text" placeholder="请输入ip地址" v-model="form.socketAddr"></el-input>
+                        </el-col>
+                        <el-col style="width: 120px;margin-left: 10px;">
+                            <el-input type="number" placeholder="请输入端口" v-model="form.socketPort"></el-input>
+                        </el-col>
+                        <el-col style="width: 100px;margin-left: 40px;">
+                            <el-button type="primary" @click="connectSokcet">连接网口</el-button>
+                        </el-col>
+                    </el-form-item>
+                </el-row>
+                <el-row>
+                    <el-form-item label="端口信息" v-show="isPortModel">
+                        <el-col style="width: 300px">
+                            <el-input type="text" placeholder="请选择端口" :disable="true" v-model="form.selectName" readonly="true" />
+                        </el-col>
+                        <el-col style="width: 100px;margin-left: 20px;">
+                            <el-button type="primary" @click="choicePort">选择端口</el-button>
+                        </el-col>
+                    </el-form-item>
+                </el-row>
+                <el-form-item label="测试指令">
+                    <el-col>
+                        <el-button type="default" @click="testCode(11)">ESC</el-button>
+                        <el-button type="default" @click="testCode(21)">TSPL连续</el-button>
+                        <el-button type="default" @click="testCode(22)">TSPL间隙</el-button>
+                        <el-button type="default" @click="testCode(31)">ZPL连续</el-button>
+                        <el-button type="default" @click="testCode(32)">ZPL间隙</el-button>
+                    </el-col>
+                </el-form-item>
+                <el-form-item label="打印内容">
+                    <el-col style="width: 440px">
+                        <el-input type="textarea" :autosize="{ minRows: 10, maxRows: 100}" placeholder="请输入打印内容"
+                            v-model="form.printData" />
+                    </el-col>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" :disabled="!connected" @click="sendPrint">发送打印</el-button>
+                    <el-button type="primary" :disabled="!connected" @click="sendPrintNote">ESC票据打印</el-button>
+                    <el-button type="primary" :disabled="!connected" @click="sendPrintLable">TSPL标签打印</el-button>
+                </el-form-item>
+            </el-form>
+        </template>
+    </div>
+</body>
+<script>
+    new Vue({
+        el: '#app',
+        data: function () {
+            return {
+                //{"value":"USB","label":"USB","disabled":false},{"value":"SERIAL","label":"串口","disabled":false},{"value":"NET","label":"网口","disabled":false}
+                models: [],
+                conModel: '',
+                isPortModel: true,
+                connected: false,
+                /** 网口配置 */
+                websock: null,
+                /** USB配置 */
+                webusb: null,
+                /** 串口配置 */
+                webserial: null,
+                form: {
+                    selectName: '未连接',
+                    socketAddr: '127.0.0.1',
+                    socketPort: 8003,
+                    printData: ''
+                }
+            }
+        },
+        methods: {
+            testCode(t) {
+                switch(t) {
+                    case 11:
+                        this.form.printData = '佳博云打印，无线聚商机\n互联网+时代，佳博云打印终端能帮您轻松实现远程打印，让您随时随地接单盈利。'
+                        break
+                    case 21:
+                        this.form.printData = 'SIZE 35 mm,45 mm\nGAP 0 mm,0 mm\nREFERENCE 0,0\nSPEED 4\nDENSITY 8\nDIRECTION 0\nSET HEAD ON\nSET PRINTKEY OFF\nSET KEY1 ON\nSET KEY2 ON\nSHIFT 0\nCLS\nTEXT 30,10,"TSS24.BF2",0,1,1,"佳博云打印,无线聚商机"\nBARCODE 30,75,"128",64,1,0,2,4,"200902125410"\nQRCODE 30,180,L,6,A,0,"www.poscom.cn"\nTEXT 220,180,"TSS24.BF2",90,2,2,"请扫码"\nPRINT 1,1\n'
+                        break
+                    case 22:
+                        this.form.printData = 'SIZE 35 mm,45 mm\nGAP 2 mm,0 mm\nREFERENCE 0,0\nSPEED 4\nDENSITY 8\nDIRECTION 0\nSET HEAD ON\nSET PRINTKEY OFF\nSET KEY1 ON\nSET KEY2 ON\nSHIFT 0\nCLS\nTEXT 30,10,"TSS24.BF2",0,1,1,"佳博云打印,无线聚商机"\nBARCODE 30,75,"128",64,1,0,2,4,"200902125410"\nQRCODE 30,180,L,6,A,0,"www.poscom.cn"\nTEXT 220,180,"TSS24.BF2",90,2,2,"请扫码"\nPRINT 1,1\n'
+                        break
+                    case 31:
+                        this.form.printData = '^XA^MCY^MTD^MD20^LT0^MMT^MNN^PW320^LL242^PR2^PMN^PON^JMA^LH0,4^LRN^CW1,Z:MSUNG.FNT^CI28^FO0,0^GB320,236,2^FS^FO48,8^A1,32,32^FD佳博云打印^FS^FO92,46^A1,28,28^FD无线聚商机^FS^FO56,80^A1,24,24^FD远程打印、随时打印^FS^FO56,110^A1,24,24^FD无人值守、自动打印^FS^FO4,140^BY2,2.4^BCN,70,Y,N,N,N ^FD>:70024523647^FS^XZ'
+                        break
+                    case 32:
+                        this.form.printData = '^XA^MCY^MTD^MD20^LT0^MMT^MNW^PW320^LL242^PR2^PMN^PON^JMA^LH0,4^LRN^CW1,Z:MSUNG.FNT^CI28^FO0,0^GB320,236,2^FS^FO48,8^A1,32,32^FD佳博云打印^FS^FO92,46^A1,28,28^FD无线聚商机^FS^FO56,80^A1,24,24^FD远程打印、随时打印^FS^FO56,110^A1,24,24^FD无人值守、自动打印^FS^FO4,140^BY2,2.4^BCN,70,Y,N,N,N ^FD>:70024523647^FS^XZ'
+                        break
+                }
+            },
+            async modelChange(value) {
+                const that = this;
+                if (value === 'USB') {
+                    that.isPortModel = true;
+                    //添加事件监听
+                    await navigator.usb.addEventListener('connect', event => {
+                        //重新连接成功
+                        this.webusb = event.device;
+                        that.form.selectName = event.device.productName;
+                        that.$message.success('USB连接成功');
+                        that.openWebUsb();
+                    });
+                    await navigator.usb.addEventListener('disconnect', event => {
+                        //断开连接成功
+                        that.form.selectName = '未连接';
+                        that.connected = false;
+                        that.$message.error('USB连接断开');
+                    });
+                    await navigator.usb.getDevices().then(devices => {
+                        if (devices.length > 0) {
+                            //找到前面选择的一个USB
+                            that.webusb = devices[0];
+                            that.form.selectName = devices[0].productName;
+                            //打开usb
+                            that.openWebUsb();
+                        }
+                    });
+                } else if (value === 'SERIAL') {
+                    that.isPortModel = true;
+                    //添加事件监听
+                    await navigator.serial.addEventListener('connect', event => {
+                        //重新连接成功
+                        that.webserial = event.target;
+                        console.log(serials[0].getInfo())
+                        that.form.selectName = '串口连接成功';
+                        this.$message.success('串口连接成功');
+                        that.openWebSerial();
+                    });
+                    await navigator.serial.addEventListener('disconnect', event => {
+                        //断开连接成功
+                        that.form.selectName = '未连接';
+                        that.connected = false;
+                        this.$message.error('串口连接断开');
+                    });
+                    navigator.serial.getPorts().then(serials => {
+                        if (serials.length > 0) {
+                            that.webserial = serials[0];
+                            console.log(serials[0].getInfo())
+                            that.form.selectName = '串口连接成功';
+                            that.openWebSerial();
+                        }
+                    });
+                } else {
+                    this.isPortModel = false;
+                }
+            },
+            async openWebUsb() {
+                await this.webusb.open();
+                await this.webusb.selectConfiguration(1);
+                await this.webusb.claimInterface(0);
+                console.log("USB准备就绪，可以进行读写");
+                this.connected = true;
+            },
+            async openWebSerial() {
+                await this.webserial.open({ baudRate: 115200, flowControl: "hardware" });
+                if (this.webserial.readable && this.webserial.writable) {
+                    console.log("串口准备就绪，可以进行读写");
+                    this.connected = true;
+                }
+            },
+			async sendPrintLable() {
+				//标签模式
+				var command = gpTSC.createNew()
+				// console.log(command)
+				command.setSize(40, 30)
+				command.setGap(2)
+				command.setCls()
+				command.setText(50, 10, "TSS24.BF2", 1, 1, "打印测试") // 文本
+				command.setQR(50, 50, "L", 5, "A", "www.poscom.cn") // 二维码
+				command.setBar(50, 150, "128", 64, 1, 2, 4,"200902125410") // 二维码
+				command.setPagePrint()
+                await this.writePrintData(gpTool.getDataView(command.getData()))
+			},
+            async sendPrintNote() {
+                var command = gpESC.createNew()
+				command.init()
+				command.setSelectJustification(1) // 中间对齐
+				command.setText("佳博云打印，无线聚商机") // 文本
+				command.setPrint()
+				command.init()
+				command.setStoreQRCodeData("www.poscom.cn") // 二维码内容
+				command.setPrintQRCode()
+				command.setBarcodeHeight(80) //条码高度
+				command.setBarcodeWidth(4) //条码宽度
+				command.setBarcodeContent("CODE93", "444444")
+				command.setPrintAndFeedRow(1)
+                await this.writePrintData(gpTool.getDataView(command.getData()))
+            },
+            async writePrintData(encodedCmds) {
+                //const encodedCmds = new Uint8Array(new TextEncoder().encode(this.form.printData))
+                if (this.conModel === 'USB') {
+                    try {
+                        await this.webusb.transferOut(
+                            this.webusb.configuration.interfaces[0].alternate.endpoints.find(obj => obj.direction === 'out').endpointNumber, encodedCmds
+                        );
+                    } catch (error) {
+                        this.$message.error('发送失败，请确认是否正常链接打印机')
+                        // 如果任何操作失败，我们可以认为设备连接可能存在问题
+                        console.error("sendPrint：", error);
+                    }
+                } else if (this.conModel === 'SERIAL') {
+                    try {
+                        const writer = this.selectPort.writable.getWriter();
+                        await writer.write(encodedCmds);
+                        writer.releaseLock();
+                    } catch (error) {
+                        this.$message.error('发送失败，请确认是否正常链接打印机')
+                        // 如果任何操作失败，我们可以认为设备连接可能存在问题
+                        console.error("sendPrint：", error);
+                    }
+                } else if (this.conModel === 'NET') {
+                    try {
+                        this.websock.send(encodedCmds)
+                    } catch (error) {
+                        this.$message.error('发送失败，请确认是否正常链接打印机')
+                        // 如果任何操作失败，我们可以认为设备连接可能存在问题
+                        console.error("sendPrint：", error);
+                    }
+                }
+                this.$message.success("发送打印成功");
+			},
+            async sendPrint() {
+                if (this.form.printData.trim().length == 0) {
+                    this.$message.error('打印内容不能为空')
+                    return;
+                }
+                const printData = encodeToGb2312(this.form.printData)
+                const testprint = gpTool.hexStringToByteArray(printData)
+                const data = Array.from(testprint)
+                const encodedCmds = new ArrayBuffer(data.length)
+                var dataView = new DataView(encodedCmds)
+                for (var j = 0; j < data.length; j++) {
+                    dataView.setUint8(j, data[j]);
+                }
+                await this.writePrintData(encodedCmds)
+            },
+            async choicePort() {
+                const that = this;
+                if (that.conModel === 'USB') {
+                    await navigator.usb.requestDevice({ filters: [] })
+                        .then(usb => {
+                            // 业务逻辑处理
+                            that.webusb = usb;
+                            that.form.selectName = usb.productName;
+                            that.openWebUsb();
+                        }).catch(error => {
+                            console.error("choicePort：" + error);
+                        });
+                } else if (that.conModel === 'SERIAL') {
+                    await navigator.serial.requestPort({ filters: [] })
+                        .then(serial => {
+                            that.webserial = serial;
+                            that.form.selectName = serial.getInfo().usbVendorId;
+                            that.openWebSerial();
+                        }).catch(error => {
+                            console.error("choicePort：" + error);
+                        });
+                } else {
+                    that.$message.error('请选择通信模式');
+                }
+            },
+            connectSokcet() {
+                const socketUrl = "ws://" + this.form.socketAddr + ":" + this.form.socketPort
+                this.websock = new WebSocket(socketUrl)
+                this.websock.onopen = this.websocketOnopen
+                this.websock.onerror = this.websocketOnerror
+                this.websock.onmessage = this.websocketOnmessage
+                this.websock.onclose = this.websocketOnclose
+                this.form.selectName = 'WebSocket连接成功'
+                this.$message.success('WebSocket连接成功')
+                console.log("网口准备就绪，可以进行读写")
+                this.connected = true
+            },
+            websocketOnopen: function () {
+                console.log("WebSocket连接成功");
+                //心跳检测重置
+                //this.heartCheck.reset().start();
+            },
+            websocketOnerror: function (e) {
+                console.log("WebSocket连接发生错误");
+                this.reconnect();
+            },
+            websocketOnmessage: function (e) {
+                console.log('监听关闭' + e)
+                console.log("-----接收消息-------", e.data);
+                //var data = eval("(" + e.data + ")"); //解析对象
+            },
+            websocketOnclose: function (e) {
+                console.log("connection closed (" + e.code + ")");
+                this.reconnect();
+            },
+            reconnect() {
+                var that = this;
+                if (that.lockReconnect) return;
+                that.lockReconnect = true;
+                //没连接上会一直重连，设置延迟避免请求过多
+                setTimeout(function () {
+                    console.info("尝试重连...");
+                    that.connectSokcet();
+                    that.lockReconnect = false;
+                }, 5000);
+            }
+        },
+        mounted() {
+            //验证是否支持各类通信类型
+            if (!'usb' in navigator) {
+                console.error('WebUSB API is not supported!')
+                this.models.push({ "value": "USB", "label": "USB", "disabled": true })
+            } else {
+                this.models.push({ "value": "USB", "label": "USB", "disabled": false })
+            }
+            if (!'serial' in navigator) {
+                console.error('WebSerial API is not supported!')
+                this.models.push({ "value": "SERIAL", "label": "串口", "disabled": true })
+            } else {
+                this.models.push({ "value": "SERIAL", "label": "串口", "disabled": false })
+            }
+            if (!"WebSocket" in window) {
+                console.error('WebSerial API is not supported!')
+                this.models.push({ "value": "NET", "label": "网口", "disabled": true })
+            } else {
+                this.models.push({ "value": "NET", "label": "网口", "disabled": false })
+            }
+        },
+        destroyed: function () { 
+            if(!this.websock) {
+                this.websock.close()
+            }
+        },
+    });
+</script>
+
+</html>

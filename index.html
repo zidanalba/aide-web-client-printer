@@ -192,19 +192,39 @@
                     this.connected = true;
                 }
             },
-			async sendPrintLable() {
-				//标签模式
-				var command = gpTSC.createNew()
-				// console.log(command)
-				command.setSize(40, 30)
-				command.setGap(2)
-				command.setCls()
-				command.setText(50, 10, "TSS24.BF2", 1, 1, "打印测试") // 文本
-				command.setQR(50, 50, "L", 5, "A", "www.poscom.cn") // 二维码
-				command.setBar(50, 150, "128", 64, 1, 2, 4,"200902125410") // 二维码
-				command.setPagePrint()
-                await this.writePrintData(gpTool.getDataView(command.getData()))
-			},
+			async sendPrintLable(qrcode = "123456789098", name = "Jaysie Lestari", dob = "04 December 2003", gender = "F", room = "Melati 202") {
+                var command = gpTSC.createNew();
+
+                // Wristband size: 25mm wide x 279mm long
+                command.setSize(25, 279);
+                command.setGap(0);
+
+                // Rotate so text runs along band length (adjust 0/1/3 if orientation wrong)
+                command.setDirection(1);
+
+                command.setCls();
+
+                // First text: qrcode
+                command.setText(67, 2548, "TSS24.BF2", 0, 1, 1, qrcode);
+
+                // Name
+                command.setText(128, 2548, "TSS24.BF2", 0, 1, 1, name);
+
+                // DOB / Gender
+                command.setText(192, 2548, "TSS24.BF2", 0, 1, 1, `${dob} / ${gender}`);
+
+                // Room
+                command.setText(255, 2548, "TSS24.BF2", 0, 1, 1, room);
+
+                // Optional QR code (TSPL doesn't have separate QR text mode like ZPL)
+                // Place near front of band
+                command.setQR(20, 20, "L", 5, "A", qrcode);
+
+                // Print
+                command.setPagePrint();
+
+                await this.writePrintData(gpTool.getDataView(command.getData()));
+            },
             async sendPrintNote() {
                 var command = gpESC.createNew()
 				command.init()

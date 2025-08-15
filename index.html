@@ -192,87 +192,20 @@
                     this.connected = true;
                 }
             },
-			// async sendPrintLable(qrcode = "123456789098", name = "Jaysie Lestari", dob = "04 December 2003", gender = "F", room = "Melati 202") {
-            //     var command = gpTSC.createNew();
-
-            //     // Wristband size: 25mm wide x 279mm long
-            //     command.setSize(25, 279);
-            //     command.setGap(0);
-
-            //     // Rotate so text runs along band length (adjust 0/1/3 if orientation wrong)
-            //     command.setDirection(1);
-
-            //     command.setCls();
-
-            //     // First text: qrcode
-            //     command.setText(67, 2548, "TSS24.BF2", 0, 1, 1, qrcode);
-
-            //     // Name
-            //     command.setText(128, 2548, "TSS24.BF2", 0, 1, 1, name);
-
-            //     // DOB / Gender
-            //     command.setText(192, 2548, "TSS24.BF2", 0, 1, 1, `${dob} / ${gender}`);
-
-            //     // Room
-            //     command.setText(255, 2548, "TSS24.BF2", 0, 1, 1, room);
-
-            //     // Optional QR code (TSPL doesn't have separate QR text mode like ZPL)
-            //     // Place near front of band
-            //     command.setQR(20, 20, "L", 5, "A", qrcode);
-
-            //     // Print
-            //     command.setPagePrint();
-
-            //     await this.writePrintData(gpTool.getDataView(command.getData()));
-            // },
             async sendPrintLable() {
-    // // Wristband mode
-    // var command = gpTSC.createNew();
+                var cmd = gpTSC.createNew();
 
-    // // Set size: 25mm wide x 279mm long
-    // command.setSize(25, 279);
+                cmd.setSize(25, 275);       // Wristband size in mm
+                cmd.setGap(0);              // No gap for continuous band
+                cmd.setCls();               // Clear buffer
+                cmd.setQR(152, 406, "L", 7, "A", 90, "2025010308009"); // QR Code
+                cmd.setText(162, 609, "TSS24.BF2", 90, 2, 2, "202507151547001");
+                cmd.setText(102, 609, "TSS24.BF2", 90, 2, 2, "John Doe");
+                cmd.setText(42, 609, "TSS24.BF2", 90, 2, 2, "04 December 2003 - F");
+                cmd.setPagePrint();         // Print 1 label
 
-    // // No gap (continuous wristband) – set to 0 or very small
-    // command.setGap(0);
-    // command.setCls();
-
-    // // Rotate 90° so text runs along the band
-    // // Depending on printer model, this might be 90 or 270 for correct orientation
-    // command.setDirection(0); // 0=normal, 1=rotated 90°
-
-    // // Clear print buffer
-
-    // // Place QR code near start of band
-    // command.setQR(20, 20, "L", 5, "A", "2025010308009");
-
-    // // First line of text
-    // command.setText(50, 20, "TSS24.BF2", 0, 1, 1, "202507151547001");
-
-    // // Name
-    // command.setText(80, 20, "TSS24.BF2", 0, 1, 1, "Jaysie Lestari");
-
-    // // DOB / Gender
-    // command.setText(110, 20, "TSS24.BF2", 0, 1, 1, "14 December 2003 / Female");
-
-    // // Print
-    // command.setPagePrint();
-
-    // // Send to printer
-    // await this.writePrintData(gpTool.getDataView(command.getData()));
-
-    var cmd = gpTSC.createNew();
-
-    cmd.setSize(25, 275);       // Wristband size in mm
-    cmd.setGap(0);              // No gap for continuous band
-    cmd.setCls();               // Clear buffer
-    cmd.setQR(152, 406, "L", 7, "A", 90, "2025010308009"); // QR Code
-    cmd.setText(162, 609, "TSS24.BF2", 90, 2, 2, "202507151547001");
-    cmd.setText(102, 609, "TSS24.BF2", 90, 2, 2, "John Doe");
-    cmd.setText(42, 609, "TSS24.BF2", 90, 2, 2, "04 December 2003 - F");
-    cmd.setPagePrint();         // Print 1 label
-
-    await this.writePrintData(gpTool.getDataView(cmd.getData()));
-},
+                await this.writePrintData(gpTool.getDataView(cmd.getData()));
+            },
             async sendPrintNote() {
                 var command = gpESC.createNew()
 				command.init()

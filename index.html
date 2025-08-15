@@ -192,19 +192,20 @@
                     this.connected = true;
                 }
             },
-			async sendPrintLable() {
-				//标签模式
-				var command = gpTSC.createNew()
-				// console.log(command)
-				command.setSize(40, 30)
-				command.setGap(2)
-				command.setCls()
-				command.setText(50, 10, "TSS24.BF2", 1, 1, "打印测试") // 文本
-				command.setQR(50, 50, "L", 5, "A", "www.poscom.cn") // 二维码
-				command.setBar(50, 150, "128", 64, 1, 2, 4,"200902125410") // 二维码
-				command.setPagePrint()
-                await this.writePrintData(gpTool.getDataView(command.getData()))
-			},
+            async sendPrintLable() {
+                var cmd = gpTSC.createNew();
+
+                cmd.setSize(25, 275);       // Wristband size in mm
+                cmd.setGap(0);              // No gap for continuous band
+                cmd.setCls();               // Clear buffer
+                cmd.setQR(152, 406, "L", 7, "A", 90, "2025010308009"); // QR Code
+                cmd.setText(162, 609, "TSS24.BF2", 90, 2, 2, "202507151547001");
+                cmd.setText(102, 609, "TSS24.BF2", 90, 2, 2, "John Doe");
+                cmd.setText(42, 609, "TSS24.BF2", 90, 2, 2, "04 December 2003 - F");
+                cmd.setPagePrint();         // Print 1 label
+
+                await this.writePrintData(gpTool.getDataView(cmd.getData()));
+            },
             async sendPrintNote() {
                 var command = gpESC.createNew()
 				command.init()
